@@ -1,0 +1,358 @@
+{
+  "name": "01 - Notificación Reserva (Tiempo Real)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reserva-notificacion",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "reserva-notificacion"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-1",
+              "leftValue": "={{ $json.body.event }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "condition-2",
+              "leftValue": "={{ $json.body.data }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-validar",
+      "name": "IF - Validar Datos",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "event-type",
+              "name": "eventType",
+              "type": "string",
+              "value": "={{ $json.body.event }}"
+            },
+            {
+              "id": "reserva-id",
+              "name": "reserva_id",
+              "type": "string",
+              "value": "={{ $json.body.data.reserva_id }}"
+            },
+            {
+              "id": "usuario-nombre",
+              "name": "usuario_nombre",
+              "type": "string",
+              "value": "={{ $json.body.data.usuario_nombre || 'Cliente' }}"
+            },
+            {
+              "id": "mesa-numero",
+              "name": "mesa_numero",
+              "type": "string",
+              "value": "={{ $json.body.data.mesa_numero || $json.body.data.mesa_id }}"
+            },
+            {
+              "id": "fecha-reserva",
+              "name": "fecha_reserva",
+              "type": "string",
+              "value": "={{ $json.body.data.fecha_reserva }}"
+            },
+            {
+              "id": "hora-reserva",
+              "name": "hora_reserva",
+              "type": "string",
+              "value": "={{ $json.body.data.hora_reserva }}"
+            },
+            {
+              "id": "num-personas",
+              "name": "num_personas",
+              "type": "number",
+              "value": "={{ $json.body.data.num_personas || 2 }}"
+            },
+            {
+              "id": "estado",
+              "name": "estado",
+              "type": "string",
+              "value": "={{ $json.body.data.estado }}"
+            },
+            {
+              "id": "timestamp",
+              "name": "timestamp",
+              "type": "string",
+              "value": "={{ $json.body.timestamp }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-transformar",
+      "name": "Set - Transformar Datos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Genera un mensaje de notificación corto y amigable (máximo 150 caracteres) para informar sobre una reserva de restaurante. Evento: {{ $json.eventType }}. Cliente: {{ $json.usuario_nombre }}. Mesa: {{ $json.mesa_numero }}. Fecha: {{ $json.fecha_reserva }}. El mensaje debe ser en español, profesional y amigable. Solo responde con el mensaje, sin explicaciones.\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "gemini-generar",
+      "name": "Gemini - Generar Mensaje",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 300],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "gemini-api-key",
+          "name": "Gemini API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "mensaje-gemini",
+              "name": "mensaje_gemini",
+              "type": "string",
+              "value": "={{ $json.candidates[0].content.parts[0].text }}"
+            },
+            {
+              "id": "event-type-2",
+              "name": "eventType",
+              "type": "string",
+              "value": "={{ $('Set - Transformar Datos').item.json.eventType }}"
+            },
+            {
+              "id": "reserva-id-2",
+              "name": "reserva_id",
+              "type": "string",
+              "value": "={{ $('Set - Transformar Datos').item.json.reserva_id }}"
+            },
+            {
+              "id": "usuario-2",
+              "name": "usuario_nombre",
+              "type": "string",
+              "value": "={{ $('Set - Transformar Datos').item.json.usuario_nombre }}"
+            },
+            {
+              "id": "mesa-2",
+              "name": "mesa_numero",
+              "type": "string",
+              "value": "={{ $('Set - Transformar Datos').item.json.mesa_numero }}"
+            },
+            {
+              "id": "fecha-2",
+              "name": "fecha_reserva",
+              "type": "string",
+              "value": "={{ $('Set - Transformar Datos').item.json.fecha_reserva }}"
+            },
+            {
+              "id": "hora-2",
+              "name": "hora_reserva",
+              "type": "string",
+              "value": "={{ $('Set - Transformar Datos').item.json.hora_reserva }}"
+            },
+            {
+              "id": "personas-2",
+              "name": "num_personas",
+              "type": "number",
+              "value": "={{ $('Set - Transformar Datos').item.json.num_personas }}"
+            },
+            {
+              "id": "timestamp-2",
+              "name": "timestamp",
+              "type": "string",
+              "value": "={{ $('Set - Transformar Datos').item.json.timestamp }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-combinar",
+      "name": "Combinar Datos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=🍽️ *Nueva Notificación - MesaYa*\n\n{{ $json.mensaje_gemini }}\n\n📋 *Detalles:*\n• Evento: {{ $json.eventType }}\n• Cliente: {{ $json.usuario_nombre }}\n• Mesa: {{ $json.mesa_numero }}\n• Personas: {{ $json.num_personas }}\n• Fecha: {{ $json.fecha_reserva }}\n• Hora: {{ $json.hora_reserva }}\n• ID: `{{ $json.reserva_id }}`\n\n🕐 {{ $json.timestamp }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-notificar",
+      "name": "Telegram - Notificar",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1250, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot",
+          "name": "Telegram Bot MesaYa"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Notificación enviada exitosamente\",\n  \"event_id\": \"{{ $('Webhook Trigger').item.json.body.id }}\",\n  \"workflow\": \"notificacion-tiempo-real\"\n}",
+        "options": {}
+      },
+      "id": "respond-ok",
+      "name": "Responder Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"message\": \"Datos inválidos: faltan campos requeridos\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "respond-error",
+      "name": "Responder Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [650, 500]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "IF - Validar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Validar Datos": {
+      "main": [
+        [
+          {
+            "node": "Set - Transformar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Transformar Datos": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Generar Mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Generar Mensaje": {
+      "main": [
+        [
+          {
+            "node": "Combinar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combinar Datos": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Notificar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram - Notificar": {
+      "main": [
+        [
+          {
+            "node": "Responder Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    {
+      "name": "MesaYa",
+      "id": "mesaya-tag"
+    },
+    {
+      "name": "Taller4",
+      "id": "taller4-tag"
+    }
+  ]
+}

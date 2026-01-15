@@ -1,0 +1,128 @@
+<div class="chat-container">
+    <!-- Header -->
+    <header class="chat-header">
+        <div class="header-content">
+            <div class="logo">
+                <span class="logo-icon">🍽️</span>
+                <h1>MesaYa</h1>
+            </div>
+            <p class="subtitle">Asistente de Reservas con IA</p>
+        </div>
+        <div class="header-actions">
+            <!-- Auth Status -->
+            @if (currentUser) {
+            <div class="user-info">
+                <span class="user-name">👤 {{ currentUser.name }}</span>
+                <button class="btn-link" (click)="logout()">Salir</button>
+            </div>
+            } @else {
+            <button class="btn-login" (click)="toggleLoginForm()">
+                🔐 Iniciar Sesión
+            </button>
+            }
+
+            <span class="status-indicator" [class.connected]="isConnected" [class.disconnected]="!isConnected">
+                {{ isConnected ? '🟢 Conectado' : '🔴 Desconectado' }}
+            </span>
+            <button class="btn-icon" (click)="clearChat()" title="Limpiar chat">
+                🗑️
+            </button>
+        </div>
+    </header>
+
+    <!-- Login Modal -->
+    @if (showLoginForm) {
+    <div class="modal-overlay" (click)="toggleLoginForm()">
+        <div class="login-modal" (click)="$event.stopPropagation()">
+            <h2>🔐 Iniciar Sesión</h2>
+            <p class="login-hint">Inicia sesión para poder hacer reservas</p>
+
+            @if (loginError) {
+            <div class="login-error">{{ loginError }}</div>
+            }
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" [(ngModel)]="loginEmail" placeholder="tu@email.com"
+                    [disabled]="isLoggingIn">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Contraseña</label>
+                <input type="password" id="password" [(ngModel)]="loginPassword" placeholder="Tu contraseña"
+                    [disabled]="isLoggingIn" (keydown.enter)="login()">
+            </div>
+
+            <div class="login-actions">
+                <button class="btn-primary" (click)="login()" [disabled]="isLoggingIn">
+                    {{ isLoggingIn ? 'Iniciando...' : 'Iniciar Sesión' }}
+                </button>
+                <button class="btn-secondary" (click)="loginDemo()" [disabled]="isLoggingIn">
+                    🚀 Modo Demo
+                </button>
+            </div>
+
+            <p class="login-demo-hint">
+                <strong>Credenciales de prueba:</strong><br>
+                Email: demo&#64;mesaya.com<br>
+                Contraseña: demo
+            </p>
+        </div>
+    </div>
+    }
+
+    <!-- Messages Area -->
+    <main class="messages-area" #messagesContainer>
+        <div class="messages-wrapper">
+            @for (message of messages; track message.timestamp) {
+            <div class="message animate-fade-in" [class.user-message]="message.role === 'user'"
+                [class.assistant-message]="message.role === 'assistant'">
+                <div class="message-avatar">
+                    {{ message.role === 'user' ? '👤' : '🤖' }}
+                </div>
+                <div class="message-content">
+                    <div class="message-bubble" [innerHTML]="formatContent(message.content)"></div>
+
+                    <!-- Tool Results Badge -->
+                    @if (message.toolsExecuted && message.toolResults && message.toolResults.length > 0) {
+                    <div class="tool-badge">
+                        <span class="tool-icon">⚡</span>
+                        <span>Ejecutadas {{ message.toolResults.length }} herramienta(s)</span>
+                    </div>
+                    }
+
+                    <span class="message-time">{{ formatTime(message.timestamp) }}</span>
+                </div>
+            </div>
+            }
+
+            <!-- Loading Indicator -->
+            @if (isLoading) {
+            <div class="message assistant-message animate-fade-in">
+                <div class="message-avatar">🤖</div>
+                <div class="message-content">
+                    <div class="message-bubble typing-indicator">
+                        <span class="dot"></span>
+                        <span class="dot"></span>
+                        <span class="dot"></span>
+                    </div>
+                </div>
+            </div>
+            }
+        </div>
+    </main>
+
+    <!-- Input Area -->
+    <footer class="input-area">
+        <div class="input-wrapper">
+            <textarea #messageInput class="message-input" [(ngModel)]="newMessage" (keydown)="onKeyDown($event)"
+                placeholder="Escribe tu mensaje... (Ej: 'Quiero reservar una mesa para 4 personas')"
+                [disabled]="isLoading" rows="1"></textarea>
+            <button class="send-button" (click)="sendMessage()" [disabled]="!newMessage.trim() || isLoading"
+                title="Enviar mensaje">
+                <span class="send-icon">➤</span>
+            </button>
+        </div>
+        <p class="input-hint">Presiona Enter para enviar • Shift+Enter para nueva línea</p>
+    </footer>
+</div>

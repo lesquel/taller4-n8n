@@ -1,0 +1,346 @@
+{
+  "name": "01 - Notificación Dual (Telegram + WhatsApp)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reserva-evento",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "reserva-evento"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "GROQ_API_KEY",
+              "value": "YOUR_GROQ_API_KEY_HERE"
+            },
+            {
+              "name": "TELEGRAM_CHAT_ID",
+              "value": "8580113495"
+            },
+            {
+              "name": "EVOLUTION_API_URL",
+              "value": "http://evolution-api:8080"
+            },
+            {
+              "name": "EVOLUTION_API_KEY",
+              "value": "429683C4C977415CAAFCCE10F7D57E11"
+            },
+            {
+              "name": "WHATSAPP_NUMBER",
+              "value": "593995153226"
+            },
+            {
+              "name": "WHATSAPP_INSTANCE_NAME",
+              "value": "WsBot"
+            }
+          ]
+        }
+      },
+      "id": "set-config-node",
+      "name": "Set - Configuración",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.event }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "if-node",
+      "name": "IF - Validar Datos",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "eventType",
+              "value": "={{ $json.body.event }}"
+            },
+            {
+              "name": "eventData",
+              "value": "={{ $json.body.data }}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ $json.body.timestamp }}"
+            }
+          ]
+        }
+      },
+      "id": "set-node",
+      "name": "Set - Transformar Datos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const eventType = $input.item.json.eventType || 'evento desconocido';\nconst eventData = $input.item.json.eventData || {};\n\nconst groqBody = {\n  model: \"llama-3.3-70b-versatile\",\n  messages: [\n    {\n      role: \"system\",\n      content: \"Eres un asistente que genera mensajes de notificación para un sistema de restaurante. Genera mensajes claros y profesionales.\"\n    },\n    {\n      role: \"user\",\n      content: `Genera un mensaje de notificación para el evento: ${eventType}. Datos: ${JSON.stringify(eventData)}`\n    }\n  ],\n  temperature: 0.7,\n  max_tokens: 200\n};\n\nreturn {\n  json: {\n    ...$input.item.json,\n    groqBody: groqBody\n  }\n};"
+      },
+      "id": "code-node",
+      "name": "Code - Preparar JSON Groq",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [950, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Set - Configuración').item.json.GROQ_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.groqBody }}",
+        "options": {}
+      },
+      "id": "groq-node",
+      "name": "HTTP Request - Groq",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1150, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "mensaje",
+              "value": "={{ $json.choices[0].message.content }}"
+            }
+          ]
+        }
+      },
+      "id": "set-mensaje-node",
+      "name": "Set - Extraer Mensaje",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1350, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ Number($('Set - Configuración').item.json.TELEGRAM_CHAT_ID) }}",
+        "text": "={{ $json.mensaje }}"
+      },
+      "id": "telegram-node",
+      "name": "Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1550, 200],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-credential",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Set - Configuración').item.json;\nconst mensaje = $input.item.json.mensaje || '';\nconst whatsappNumber = config.WHATSAPP_NUMBER || '';\nconst instanceName = config.WHATSAPP_INSTANCE_NAME || 'mi-whatsapp';\n\nconst evolutionBody = {\n  number: whatsappNumber,\n  text: mensaje\n};\n\nreturn {\n  json: {\n    ...$input.item.json,\n    evolutionBody: evolutionBody,\n    evolutionUrl: `${config.EVOLUTION_API_URL}/message/sendText/${instanceName}`,\n    evolutionApiKey: config.EVOLUTION_API_KEY\n  }\n};"
+      },
+      "id": "code-evolution-node",
+      "name": "Code - Preparar JSON Evolution",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1350, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.evolutionUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $json.evolutionApiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.evolutionBody }}",
+        "options": {
+          "timeout": 5000,
+          "response": {
+            "response": {
+              "fullResponse": false,
+              "neverError": true
+            }
+          },
+          "redirect": {
+            "redirect": {
+              "followRedirects": true
+            }
+          }
+        }
+      },
+      "id": "whatsapp-node",
+      "name": "HTTP Request - Evolution API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1550, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Notificación enviada a Telegram y WhatsApp\"\n}"
+      },
+      "id": "respond-node",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1750, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set - Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Configuración": {
+      "main": [
+        [
+          {
+            "node": "IF - Validar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Validar Datos": {
+      "main": [
+        [
+          {
+            "node": "Set - Transformar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Transformar Datos": {
+      "main": [
+        [
+          {
+            "node": "Code - Preparar JSON Groq",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Preparar JSON Groq": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Groq",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Groq": {
+      "main": [
+        [
+          {
+            "node": "Set - Extraer Mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Extraer Mensaje": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code - Preparar JSON Evolution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Preparar JSON Evolution": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Evolution API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Evolution API": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-01-15T00:00:00.000Z",
+  "versionId": "1"
+}

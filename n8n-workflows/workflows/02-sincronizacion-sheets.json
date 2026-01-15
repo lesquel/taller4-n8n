@@ -1,0 +1,197 @@
+{
+  "name": "02 - Sincronización Google Sheets",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reserva-sheets-sync",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "reserva-sheets-sync"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fecha-hora",
+              "name": "FECHA_HORA",
+              "type": "string",
+              "value": "={{ new Date($json.body.timestamp || Date.now()).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }) }}"
+            },
+            {
+              "id": "tipo-evento",
+              "name": "TIPO_EVENTO",
+              "type": "string",
+              "value": "={{ $json.body.event }}"
+            },
+            {
+              "id": "id-reserva",
+              "name": "ID_RESERVA",
+              "type": "string",
+              "value": "={{ $json.body.data.reserva_id || $json.body.id || 'N/A' }}"
+            },
+            {
+              "id": "cliente",
+              "name": "CLIENTE",
+              "type": "string",
+              "value": "={{ $json.body.data.usuario_nombre || 'N/A' }}"
+            },
+            {
+              "id": "mesa",
+              "name": "MESA",
+              "type": "string",
+              "value": "={{ $json.body.data.mesa_numero || $json.body.data.mesa_id || 'N/A' }}"
+            },
+            {
+              "id": "num-personas",
+              "name": "NUM_PERSONAS",
+              "type": "number",
+              "value": "={{ $json.body.data.num_personas || 0 }}"
+            },
+            {
+              "id": "fecha-reserva",
+              "name": "FECHA_RESERVA",
+              "type": "string",
+              "value": "={{ $json.body.data.fecha_reserva || 'N/A' }}"
+            },
+            {
+              "id": "hora-reserva",
+              "name": "HORA_RESERVA",
+              "type": "string",
+              "value": "={{ $json.body.data.hora_reserva || 'N/A' }}"
+            },
+            {
+              "id": "estado",
+              "name": "ESTADO",
+              "type": "string",
+              "value": "={{ $json.body.data.estado || 'N/A' }}"
+            },
+            {
+              "id": "source",
+              "name": "FUENTE",
+              "type": "string",
+              "value": "={{ $json.body.metadata.source || 'ms-reservations' }}"
+            },
+            {
+              "id": "correlation",
+              "name": "CORRELATION_ID",
+              "type": "string",
+              "value": "={{ $json.body.metadata.correlation_id || 'N/A' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-estructurar",
+      "name": "Estructurar Datos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.GOOGLE_SHEETS_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "google-sheets",
+      "name": "Google Sheets - Agregar",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [650, 300],
+      "notes": "CONFIGURACION:\n1. Configura la credencial OAuth2 de Google Sheets\n2. Coloca tu GOOGLE_SHEETS_ID en el campo Document\n3. La primera fila del Sheet debe tener estos headers:\nFECHA_HORA | TIPO_EVENTO | ID_RESERVA | CLIENTE | MESA | NUM_PERSONAS | FECHA_RESERVA | HORA_RESERVA | ESTADO | FUENTE | CORRELATION_ID",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-oauth",
+          "name": "Google Sheets MesaYa"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Evento sincronizado con Google Sheets\",\n  \"event_id\": \"{{ $('Webhook Trigger').item.json.body.id }}\",\n  \"workflow\": \"sheets-sync\",\n  \"row_added\": true\n}",
+        "options": {}
+      },
+      "id": "respond-ok",
+      "name": "Responder Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [850, 300]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Estructurar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Estructurar Datos": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Agregar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Agregar": {
+      "main": [
+        [
+          {
+            "node": "Responder Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    {
+      "name": "MesaYa",
+      "id": "mesaya-tag"
+    },
+    {
+      "name": "Taller4",
+      "id": "taller4-tag"
+    }
+  ]
+}

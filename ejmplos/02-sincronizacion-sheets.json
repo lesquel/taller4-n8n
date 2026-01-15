@@ -1,0 +1,165 @@
+{
+  "name": "02 - Sincronización Google Sheets",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sync-sheets",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "sync-sheets"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assignment-1",
+              "name": "fecha_hora",
+              "value": "={{ $json.body.timestamp }}",
+              "type": "string"
+            },
+            {
+              "id": "assignment-3",
+              "name": "tipo_evento",
+              "value": "={{ $json.body.event }}",
+              "type": "string"
+            },
+            {
+              "id": "assignment-4",
+              "name": "id_registro",
+              "value": "={{ $json.body.data.reserva_id || $json.body.data.plato_id || 'N/A' }}",
+              "type": "string"
+            },
+            {
+              "id": "assignment-5",
+              "name": "descripcion",
+              "value": "={{ JSON.stringify($json.body.data) }}",
+              "type": "string"
+            },
+            {
+              "id": "assignment-6",
+              "name": "usuario",
+              "value": "={{ $json.body.metadata.source }}",
+              "type": "string"
+            },
+            {
+              "id": "assignment-7",
+              "name": "estado",
+              "value": "={{ $json.body.data.estado || 'N/A' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-node",
+      "name": "Set - Transformar Datos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1dkOfO90G9eyYHGZVO6NJ3SjBRKhMkgfTDAxJ9NnYLx0",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Eventos",
+          "mode": "list",
+          "cachedResultName": "Eventos"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Fecha/Hora": "={{ $json.fecha_hora }}",
+            "Tipo de Evento": "={{ $json.tipo_evento }}",
+            "ID Registro": "={{ $json.id_registro }}",
+            "Descripción": "={{ $json.descripcion }}",
+            "Usuario": "={{ $json.usuario }}",
+            "Estado": "={{ $json.estado }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "sheets-node",
+      "name": "Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [850, 300],
+      "notes": "⚠️ CONFIGURACIÓN REQUERIDA:\n1. Document ID: Reemplaza 'TU_ID_DE_GOOGLE_SHEETS_AQUI' con tu ID real\n2. Sheet Name: Cambia 'Sheet1' al nombre exacto de tu hoja (ver pestañas en Google Sheets)\nObtén el ID con: .\\obtener-sheets-id.ps1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Evento sincronizado con Google Sheets\"\n}",
+        "options": {}
+      },
+      "id": "respond-node",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set - Transformar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Transformar Datos": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-01-15T00:00:00.000Z",
+  "versionId": "1"
+}

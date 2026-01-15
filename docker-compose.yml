@@ -1,0 +1,359 @@
+services:
+  # ═══════════════════════════════════════════════════════════════════════
+  # INFRAESTRUCTURA BASE
+  # ═══════════════════════════════════════════════════════════════════════
+
+  # ───────────────────────────────────────────────────────────────
+  # RabbitMQ - Broker de mensajería para microservicios
+  # ───────────────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: mesaya-rabbitmq
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-mesaya}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-mesaya_secret}
+    ports:
+      - '5672:5672'   # AMQP
+      - '15672:15672' # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mesaya-network
+
+  # ───────────────────────────────────────────────────────────────
+  # Redis - Cache para idempotencia
+  # ───────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: mesaya-redis
+    command: redis-server --appendonly yes
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mesaya-network
+
+  # ───────────────────────────────────────────────────────────────
+  # PostgreSQL - Base de datos (db_mesas, db_reservas, mesaya)
+  # ───────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: mesaya-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mesaya}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mesaya_secret}
+      POSTGRES_DB: postgres
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-mesaya} -d postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mesaya-network
+
+  # ───────────────────────────────────────────────────────────────
+  # Kafka - Event streaming para mesa-ya-res (monolito)
+  # SECCIÓN COMENTADA: El código fuente no se encuentra en el espacio de trabajo
+  # ───────────────────────────────────────────────────────────────
+  # kafka:
+  #   image: apache/kafka:3.8.0
+  #   hostname: kafka
+  #   container_name: mesaya-kafka
+  #   environment:
+  #     KAFKA_NODE_ID: 1
+  #     KAFKA_PROCESS_ROLES: broker,controller
+  #     KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+  #     KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+  #     KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+  #     KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  #     KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  #     KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+  #     KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+  #     KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  #     CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+  #   ports:
+  #     - '9092:9092'
+  #     - '29092:29092'
+  #   healthcheck:
+  #     test: ['CMD-SHELL', '/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1']
+  #     interval: 15s
+  #     timeout: 10s
+  #     retries: 10
+  #     start_period: 30s
+  #   networks:
+  #     - mesaya-network
+
+  # ───────────────────────────────────────────────────────────────
+  # Kafka Init - Crear topics necesarios
+  # SECCIÓN COMENTADA: Dependencia de Kafka (no longer needed)
+  # ───────────────────────────────────────────────────────────────
+  # kafka-init:
+  #   image: apache/kafka:3.8.0
+  #   container_name: mesaya-kafka-init
+  #   depends_on:
+  #     kafka:
+  #       condition: service_healthy
+  #   entrypoint: ['/bin/bash', '-c']
+  #   command:
+  #     - |
+  #       echo "Creando topics de Kafka..."
+  #       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic mesa-ya.reviews.created --partitions 1 --replication-factor 1
+  #       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic mesa-ya.restaurants.created --partitions 1 --replication-factor 1
+  #       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic mesa-ya.sections.created --partitions 1 --replication-factor 1
+  #       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic mesa-ya.tables.created --partitions 1 --replication-factor 1
+  #       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic mesa-ya.menus.created --partitions 1 --replication-factor 1
+  #       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic mesa-ya.dishes.created --partitions 1 --replication-factor 1
+  #       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic mesa-ya.images.created --partitions 1 --replication-factor 1
+  #       echo "Topics creados exitosamente!"
+  #   restart: 'no'
+  #   networks:
+  #     - mesaya-network
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # MICROSERVICIOS (Patrón Idempotent Consumer)
+  # ═══════════════════════════════════════════════════════════════════════
+
+  # ───────────────────────────────────────────────────────────────
+  # API Gateway - Punto de entrada (valida JWT)
+  # Puerto: 3000 - Para microservicios (reservas idempotentes)
+  # ───────────────────────────────────────────────────────────────
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: mesaya-gateway
+    env_file:
+      - .env
+      - ./gateway/.env
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-mesaya}:${RABBITMQ_PASS:-mesaya_secret}@rabbitmq:5672
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-change-this-super-long-secret-key}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-your-gemini-api-key-here}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      MCP_SERVER_URL: http://mcp-server:3005
+    ports:
+      - '3000:3000'
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - mesaya-network
+
+  # ───────────────────────────────────────────────────────────────
+  # MCP Server - Model Context Protocol (Taller 3 IA)
+  # ───────────────────────────────────────────────────────────────
+  mcp-server:
+    build:
+      context: ./mcp-server
+      dockerfile: Dockerfile
+    container_name: mesaya-mcp-server
+    env_file:
+      - .env
+      - ./mcp-server/.env
+    environment:
+      API_GATEWAY_URL: http://gateway:3000
+      MCP_SERVER_PORT: 3005
+    ports:
+      - '3005:3005'
+    depends_on:
+      - gateway
+    networks:
+      - mesaya-network
+
+  # ───────────────────────────────────────────────────────────────
+  # Frontend - Angular Chat UI (Taller 3 IA)
+  # ───────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mesaya-frontend
+    ports:
+      - '4200:80'
+    depends_on:
+      - gateway
+      - mcp-server
+    networks:
+      - mesaya-network
+
+  # ───────────────────────────────────────────────────────────────
+  # Microservicio Tables (Entidad Maestra)
+  # ───────────────────────────────────────────────────────────────
+  ms-tables:
+    build:
+      context: ./ms-tables
+      dockerfile: Dockerfile
+    container_name: mesaya-ms-tables
+    env_file:
+      - .env
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-mesaya}:${RABBITMQ_PASS:-mesaya_secret}@rabbitmq:5672
+      DATABASE_URL: postgres://${POSTGRES_USER:-mesaya}:${POSTGRES_PASSWORD:-mesaya_secret}@postgres:5432/db_mesas
+      DB_HOST: postgres
+      DB_PORT: 5432
+      MS_TABLES_DB_HOST: postgres
+      MS_TABLES_DB_PORT: 5432
+      MS_TABLES_DB_USER: ${POSTGRES_USER:-mesaya}
+      MS_TABLES_DB_PASSWORD: ${POSTGRES_PASSWORD:-mesaya_secret}
+      MS_TABLES_DB_NAME: db_mesas
+      PGDATABASE: db_mesas
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - mesaya-network
+
+  # ───────────────────────────────────────────────────────────────
+  # Microservicio Reservations (Entidad Transaccional + Idempotencia)
+  # ───────────────────────────────────────────────────────────────
+  ms-reservations:
+    build:
+      context: ./ms-reservations
+      dockerfile: Dockerfile
+    container_name: mesaya-ms-reservations
+    env_file:
+      - .env
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-mesaya}:${RABBITMQ_PASS:-mesaya_secret}@rabbitmq:5672
+      DATABASE_URL: postgres://${POSTGRES_USER:-mesaya}:${POSTGRES_PASSWORD:-mesaya_secret}@postgres:5432/db_reservas
+      DB_HOST: postgres
+      DB_PORT: 5432
+      MS_RESERVATIONS_DB_HOST: postgres
+      MS_RESERVATIONS_DB_PORT: 5432
+      MS_RESERVATIONS_DB_USER: ${POSTGRES_USER:-mesaya}
+      MS_RESERVATIONS_DB_PASSWORD: ${POSTGRES_PASSWORD:-mesaya_secret}
+      MS_RESERVATIONS_DB_NAME: db_reservas
+      PGDATABASE: db_reservas
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # n8n Integration (Taller 4)
+      N8N_WEBHOOK_URL: http://n8n:5678
+      N8N_ENABLED: ${N8N_ENABLED:-true}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      n8n:
+        condition: service_healthy
+    networks:
+      - mesaya-network
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # MONOLITO LEGACY (mesa-ya-res) - API REST completa
+  # SECCIÓN COMENTADA: El código fuente no se encuentra en el espacio de trabajo
+  # ═══════════════════════════════════════════════════════════════════════
+
+  # ───────────────────────────────────────────────────────────────
+  # Mesa-Ya-Res - API REST (Auth, Restaurantes, Menús, etc.)
+  # Puerto: 3001 - Para login y obtener JWT
+  # Docs: http://localhost:3001/docs
+  # ───────────────────────────────────────────────────────────────
+  # mesa-ya-res:
+  #   build:
+  #     context: ./mesa-ya-res
+  #     dockerfile: Dockerfile
+  #   container_name: mesaya-rest-api
+  #   env_file:
+  #     - ./mesa-ya-res/.env
+  #   environment:
+  #     KAFKA_BROKER: kafka:9092
+  #     KAFKA_BROKERS: kafka:9092
+  #     KAFKA_CLIENT_ID: mesa-ya-service
+  #     KAFKA_GROUP_ID: mesa-ya-group
+  #     NODE_ENV: production
+  #     APP_PORT: 3001
+  #   ports:
+  #     - '3001:3001'
+  #   depends_on:
+  #     kafka:
+  #       condition: service_healthy
+  #     kafka-init:
+  #       condition: service_completed_successfully
+  #   restart: unless-stopped
+  #   networks:
+  #     - mesaya-network
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # AUTOMATIZACIÓN DE WORKFLOWS (Taller 4)
+  # ═══════════════════════════════════════════════════════════════════════
+
+  # ───────────────────────────────────────────────────────────────
+  # n8n - Orquestador de Workflows Event-Driven
+  # UI: http://localhost:5678 (admin/admin)
+  # ───────────────────────────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: mesaya-n8n
+    restart: always
+    ports:
+      - '5678:5678'
+    environment:
+      # Autenticación básica para UI
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-admin}
+      # URLs para webhooks
+      - WEBHOOK_URL=http://n8n:5678/
+      - N8N_EDITOR_BASE_URL=http://localhost:5678/
+      # Permitir acceso a variables de entorno en nodos
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      # Timezone
+      - GENERIC_TIMEZONE=America/Guayaquil
+      - TZ=America/Guayaquil
+      # Credenciales para workflows (disponibles como variables)
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@mesaya.com}
+      - GOOGLE_SHEETS_ID=${GOOGLE_SHEETS_ID:-}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-mesaya_webhook_secret_2024}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:5678/healthz || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - mesaya-network
+
+volumes:
+  rabbitmq_data:
+  redis_data:
+  postgres_data:
+  n8n_data:
+
+networks:
+  mesaya-network:
+    driver: bridge
